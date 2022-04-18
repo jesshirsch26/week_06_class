@@ -22,7 +22,7 @@ Numeric values are not the only type of data that we must learn to manipulate. D
 
 Complete all questions in the `Week_06_Assignment.Rmd` file.
 
-1.  Open the [assignment URL](https://classroom.github.com/a/8DoUa_KP)
+1.  Open the [assignment URL](https://classroom.github.com/a/0rNvEQTA)
 2.  Accept the assignment.
 3.  Open the newly created repository. It will be named `week-06-assignment-<YOUR GITHUB USERNAME>`.
 4.  Clone the repository to your local machine.
