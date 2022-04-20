@@ -1,0 +1,305 @@
+---
+title: "FOIA Log Exploration"
+author: "Jessica Hirsch"
+date: '2022-04-18'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(readxl)
+library(tidyverse)
+library(here)
+library(janitor)
+```
+
+```{r}
+foia_log_OMB <- read_excel(here::here("Data", "OMB FOIA TRACKING 032719.xlsx" ))
+```
+
+```{r}
+foia_log_OMB <- clean_names(foia_log_OMB)
+```
+
+```{r}
+foia_log_OMB <-
+  foia_log_OMB %>% 
+  rename("date_received" = date_written_request_received_by_agency,
+         "date_assigned" = assigned_date,
+         "division" = omb_division,
+         "date_review" = agency_review_date,
+         "is_noncustodial_record" = does_the_request_seek_non_custodial_records_from_dti_omb_or_any,
+         "noncustodial_provided_other_agency" = if_non_custodial_records_were_provided_by_another_agency_provid,
+         "date_response" = date_of_agency_response_to_requesting_party_under_34_of_policy,
+         "date_estimate_sent" = estimate_sent,
+         "all_requested_records_sent" = were_all_requested_records_provided_on_date_of_agency_s_respons,
+         "date_requested_records_not_provided" = if_all_requested_records_were_not_provided_as_of_date_of_agency,
+         "copying_fees" = copying_fees_note_1st_20_pages_free)
+```
+
+```{r}
+glimpse(foia_log_OMB)
+```
+
+How many NA's in each field?
+
+```{r}
+foia_log_OMB %>% 
+  summarise(across(everything(), ~ sum(is.na(.)))) %>% 
+  glimpse()
+```
+
+How many Unique Values are there?
+
+```{r}
+foia_log_OMB %>% 
+  summarise(across(everything(), ~ length(unique(.)))) %>% 
+  glimpse()
+```
+
+who was assigned foia requests at OMB?
+
+```{r}
+foia_log_OMB %>% 
+  count(assigned_to)
+```
+
+# Strings
+
+## Stringer (`str_`)
+```{r}
+#str_extract()
+#str_remove()
+#str_remove_all()
+#str_detect()
+#str_replace()
+#str_replace_all()
+```
+
+#Regex
+## Who are FOIA logs assigned to?
+
+```{r}
+foia_log_OMB <- 
+foia_log_OMB %>% 
+  mutate(assigned_to = str_remove_all(string = assigned_to,
+                                      pattern = "[^A-Za-z]"),
+         assigned_to = if_else(is.na(assigned_to), "None", assigned_to))
+```
+
+```{r}
+foia_log_OMB %>% 
+  count(internally_reviewed_by)
+```
+
+```{r}
+foia_log_OMB <- 
+foia_log_OMB %>% 
+  mutate(internally_reviewed_by = str_remove_all(internally_reviewed_by,
+                                                 "[^A-Za-z]"),
+         internally_reviewed_by = if_else(is.na(assigned_to), "None", assigned_to))
+```
+
+
+ #Exploring `Division`
+ 
+ benefits office
+ pensions
+ PHRST
+ HRM
+ OSP
+ 
+```{r}
+foia_log_OMB <- 
+foia_log_OMB %>% 
+  mutate(division = case_when(
+    str_detect(string = division, pattern = "Dir") ~ "Director's Office",
+    str_detect(string = division, pattern = "Ben") ~ "Benefits Office",
+    str_detect(string = division, pattern = "Pension") ~ "Pensions",
+    str_detect(string = division, pattern = "PHRST") ~ "PHRST",
+    str_detect(string = division, pattern = "HR") ~ "HRM",
+    str_detect(string = division, pattern = "OSP") ~ "OSP",
+    TRUE ~ division
+  )) 
+```
+
+# `is_noncustodial_record`
+
+```{r}
+foia_log_OMB <- 
+foia_log_OMB %>% 
+  mutate(is_noncustodial_record = case_when(
+    str_detect(string = is_noncustodial_record, pattern = "[Nn][Oo]") ~ "No",
+    str_detect(string = is_noncustodial_record, pattern = "[Yy][Ee][Ss]") ~ "Yes",
+    TRUE ~ is_noncustodial_record
+  )) 
+```
+
+# `all_requested_records_sent`
+
+Create`all_records_sent_flag`
+
+```{r}
+foia_log_OMB <- 
+foia_log_OMB %>% 
+  mutate(all_requested_records_sent_flag = case_when(
+    str_detect(string = all_requested_records_sent, pattern = "^[Nn][Oo]") ~ "No",
+    str_detect(string = all_requested_records_sent, pattern = "^[Yy]") ~ "Yes",
+    str_detect(string = all_requested_records_sent, pattern = "^[Pp]") ~ "Partial",
+    str_detect(string = all_requested_records_sent, pattern = "^[^YyNnPp]") ~ "Other",
+    TRUE ~ all_requested_records_sent
+  )) 
+```
+
+Create `all_requested_records_sent_detail`
+
+```{r}
+foia_log_OMB <- 
+foia_log_OMB %>% 
+  mutate(all_requested_records_sent_detail = str_remove(string = all_requested_records_sent,
+                                                 pattern = "^[YyNnPp][\\w,]+[\\s]*"),
+       all_requested_records_sent_detail = str_to_sentence(all_requested_records_sent_detail))
+```
+
+# `current status`
+
+```{r}
+foia_log_OMB <- 
+foia_log_OMB %>% 
+  mutate(current_status_flag = str_extract(string = current_status,
+                                           pattern = "^Closed|^Open|^Inactive"))
+```
+
+```{r}
+foia_log_OMB <-
+  foia_log_OMB %>%
+  mutate(current_status_detail = case_when(
+           str_detect(string = current_status,
+                      pattern = "[Rr]ecords ([Ss]ent|[Ee]mail|[Pp]rovided)|[Ii]nformation [Ss]ent|[Rr]esponse[s]* [Ss]ent|reviewed|reside|responded|fulfilled") ~ "Sent",
+           str_detect(string = current_status, pattern = "[Pp]artial") ~ "Partial",
+           str_detect(string = current_status, pattern = "[Pp]ossession|no responsive") ~ "Not in possession",
+           str_detect(string = current_status, pattern = "[Nn][Oo][Tt]") ~ "Not sent",
+           str_detect(string = current_status, pattern = "^Open") ~ "Open",
+           str_detect(string = current_status, pattern = "[Ww]ithdrawn|withdrew") ~ "Withdrawn",
+           str_detect(string = current_status, pattern = "[Aa]gency|[Ww]eb|internet|DSCYTF|online|DHR|DOL") ~ "Referred elsewhere",
+           str_detect(string = current_status, pattern = "[Nn]o res[po]{2}nse") ~ "No response from requestor"
+         ))
+```
+
+
+#Factors
+## Who was assigned the most requests?
+
+```{r}
+foia_log_OMB %>% 
+  count(assigned_to) %>% 
+  ggplot(aes(x = n,
+             y = assigned_to)) +
+  geom_col()
+```
+
+```{r}
+likert <- c(
+  "Strongly Agree",
+  "Agree",
+  "Neutral",
+  "Disagree",
+  "Strongly Disagree"
+)
+```
+
+```{r}
+sort(likert)
+```
+
+```{r}
+likert_leveled <- factor(likert, levels = likert)
+```
+
+```{r}
+sort(likert_leveled)
+```
+
+```{r}
+set.seed(1231)
+sample_survey <-
+  data.frame(ID = 1:1000,
+             q1 = sample(likert, size = 1000, replace = T),
+             q2 = sample(likert, size = 1000, replace = T),
+             q3 = round(runif(1000, 1, 5)),
+             stringsAsFactors = F)
+```
+
+```{r}
+sample_survey %>% 
+  mutate(q1 = factor(q1, levels = likert),
+         q1 = fct_rev(q1)) %>% 
+  ggplot(aes(y = q1)) +
+  geom_bar()
+```
+
+#Forecats (`fct_`)
+
+```{r}
+assigned_order <- c("Bert", "Jessica","None")
+
+foia_log_OMB %>% 
+  count(assigned_to) %>%
+  mutate(assigned_to = factor(assigned_to, levels = assigned_order),
+         assigned_to = fct_rev(assigned_to)) %>% 
+  ggplot(aes(x = n,
+             y = assigned_to)) +
+  geom_col()
+```
+
+
+`current_status_detail`
+
+```{r}
+foia_log_OMB %>% 
+  count(current_status_detail) %>% 
+  mutate(current_status_detail = fct_reorder(current_status_detail, n)) %>% 
+  ggplot(aes(x = n,
+             y = current_status_detail)) +
+  geom_col()
+```
+
+# `divisions`
+
+```{r}
+foia_log_OMB %>% 
+  count(division) %>% 
+  mutate(division = fct_reorder(division, n)) %>% 
+  ggplot(aes(x = n,
+             y =division)) +
+  geom_col()
+```
+
+# Dates
+
+```{r}
+foia_log_OMB %>% 
+  select(contains("date")) %>% 
+  glimpse()
+```
+
+```{r}
+as.Date("2021-11-01")
+as.Date("21/11/1", format = "%y/%m/%d")
+as.Date("1/11/21", format = "%d/%m/%y")
+as.Date("11/1/2021", format = "%m/%d/%Y")
+as.Date("November 1, 2021")
+```
+```{r}
+#library(lubridate)
+
+ymd("2021-11-01")
+ymd("21/11/1")
+dmy("1/11/21")
+mdy("11/1/2021")
+mdy("November 1, 2021")
+```
+
